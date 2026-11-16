@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#183153">
+  <meta name="description" content="Mobile product and inventory manager">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <title>Store Manager</title>
+
+  <style>
+    :root {
+      font-family: system-ui, sans-serif;
+      color: #172033;
+      background: #f3f6fa;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    h1 { margin-bottom: 4px; }
+    .muted { color: #637083; }
+
+    form, .product-card {
+      background: white;
+      border-radius: 14px;
+      padding: 16px;
+      margin: 16px 0;
+      box-shadow: 0 2px 10px #18315312;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin: 12px 0 5px;
+    }
+
+    input, button {
+      font: inherit;
+      width: 100%;
+      padding: 11px;
+      border-radius: 9px;
+      border: 1px solid #cbd3df;
+    }
+
+    button {
+      border: 0;
+      background: #183153;
+      color: white;
+      font-weight: 700;
+      margin-top: 12px;
+      cursor: pointer;
+    }
+
+    button.secondary { background: #e8eef6; color: #183153; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .product-card h3 { margin: 0 0 8px; }
+    .product-card img.photo { width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; }
+    .qr { margin-top: 12px; }
+    .qr canvas, .qr img { max-width: 150px; height: auto; }
+    .purchase { border-top: 1px solid #e5e9ef; padding-top: 8px; margin-top: 8px; }
+    dialog { border: 0; border-radius: 14px; width: min(94%, 440px); }
+    dialog::backdrop { background: #10182899; }
+    .empty { text-align: center; padding: 24px; }
+  </style>
+
+  <!-- QR generation needs internet access the first time this library is loaded. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Store Manager</h1>
+    <div class="muted">Products, purchase costs, stock and QR codes</div>
+  </header>
+
+  <form id="product-form">
+    <h2>Add product</h2>
+
+    <label for="name">Product name</label>
+    <input id="name" required maxlength="100" placeholder="e.g. Classic T-Shirt">
+
+    <div class="grid">
+      <div>
+        <label for="category">Category</label>
+        <input id="category" placeholder="Clothing">
+      </div>
+      <div>
+        <label for="sku">SKU / QR code value</label>
+        <input id="sku" required maxlength="60" placeholder="e.g. CLT-001">
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <label for="buy-price">Buying price per item</label>
+        <input id="buy-price" type="number" min="0" step="0.01" required>
+      </div>
+      <div>
+        <label for="sell-price">Selling price</label>
+        <input id="sell-price" type="number" min="0" step="0.01" required>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <label for="quantity">Quantity purchased</label>
+        <input id="quantity" type="number" min="0" step="1" value="1" required>
+      </div>
+      <div>
+        <label for="purchase-date">Purchase date</label>
+        <input id="purchase-date" type="date" required>
+      </div>
+    </div>
+
+    <label for="photo">Product photo (optional)</label>
+    <input id="photo" type="file" accept="image/*" capture="environment">
+
+    <button type="submit">Save product</button>
+  </form>
+
+  <section>
+    <h2>Inventory</h2>
+    <div id="product-list"><p class="empty muted">Loading products…</p></div>
+  </section>
+
+  <dialog id="restock-dialog">
+    <form id="restock-form">
+      <h2>Record a purchase</h2>
+      <p id="restock-product-name"></p>
+      <input id="restock-product-id" type="hidden">
+
+      <label for="restock-quantity">Quantity purchased</label>
+      <input id="restock-quantity" type="number" min="1" step="1" required>
+
+      <label for="restock-price">Buying price per item</label>
+      <input id="restock-price" type="number" min="0" step="0.01" required>
+
+      <label for="restock-date">Purchase date</label>
+      <input id="restock-date" type="date" required>
+
+      <button type="submit">Save purchase</button>
+      <button class="secondary" type="button" id="cancel-restock">Cancel</button>
+    </form>
+  </dialog>
+
+  <script>
+    const DB_NAME = "store-manager";
+    const DB_VERSION = 1;
+    const STORE_NAME = "products";
+
+    const productForm = document.querySelector("#product-form");
+    const productList = document.querySelector("#product-list");
+    const restockDialog = document.querySelector("#restock-dialog");
+    const today = new Date().toISOString().slice(0, 10);
+    document.querySelector("#purchase-date").value = today;
+
+    function openDatabase() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: "id" });
+          }
+        };
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function getAllProducts() {
+      const db = await openDatabase();
+      return new Promise((resolve, reject) => {
+        const request = db.transaction(STORE_NAME).objectStore(STORE_NAME).getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function saveProduct(product) {
+      const db = await openDatabase();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, "readwrite");
+        transaction.objectStore(STORE_NAME).put(product);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }
+
+    function escapeHtml(value = "") {
+      return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;",
+        '"': "&quot;", "'": "&#039;"
+      })[char]);
+    }
+
+    function readPhoto(file) {
+      if (!file) return Promise.resolve("");
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function money(value) {
+      return Number(value).toFixed(2);
+    }
+
+    async function renderProducts() {
+      const products = await getAllProducts();
+
+      if (!products.length) {
+        productList.innerHTML = '<p class="empty muted">No products yet. Add one using the form above.</p>';
+        return;
+      }
+
+      productList.innerHTML = products.map(product => {
+        const purchases = (product.purchases || []).map(purchase => `
+          <div class="purchase">
+            Purchased ${escapeHtml(purchase.date)}:
+            ${purchase.quantity} × ${money(purchase.buyPrice)}
+          </div>
+        `).join("");
+
+        return `
+          <article class="product-card">
+            ${product.photo ? `<img class="photo" src="${product.photo}" alt="${escapeHtml(product.name)}">` : ""}
+            <h3>${escapeHtml(product.name)}</h3>
+            <div class="muted">${escapeHtml(product.category || "Uncategorized")} · SKU: ${escapeHtml(product.sku)}</div>
+            <p><strong>In stock:</strong> ${product.stock}</p>
+            <p><strong>Buying price:</strong> ${money(product.buyPrice)} &nbsp; <strong>Selling price:</strong> ${money(product.sellPrice)}</p>
+            ${purchases}
+            <div class="qr" id="qr-${escapeHtml(product.id)}"></div>
+            <button type="button" class="secondary restock-button" data-id="${escapeHtml(product.id)}">Record restock</button>
+          </article>
+        `;
+      }).join("");
+
+      for (const product of products) {
+        const qrElement = document.querySelector(`#qr-${CSS.escape(product.id)}`);
+        if (qrElement && window.QRCode) {
+          new QRCode(qrElement, {
+            text: product.sku,
+            width: 128,
+            height: 128
+          });
+        } else if (qrElement) {
+          qrElement.textContent = `QR value: ${product.sku} (connect to the internet to display QR)`;
+        }
+      }
+    }
+
+    productForm.addEventListener("submit", async event => {
+      event.preventDefault();
+
+      const sku = document.querySelector("#sku").value.trim();
+      const existing = await getAllProducts();
+      if (existing.some(product => product.sku.toLowerCase() === sku.toLowerCase())) {
+        alert("That SKU is already in use. Choose a unique SKU for each product.");
+        return;
+      }
+
+      const quantity = Number(document.querySelector("#quantity").value);
+      const buyPrice = Number(document.querySelector("#buy-price").value);
+      const photoFile = document.querySelector("#photo").files[0];
+
+      const product = {
+        id: crypto.randomUUID(),
+        name: document.querySelector("#name").value.trim(),
+        category: document.querySelector("#category").value.trim(),
+        sku,
+        buyPrice,
+        sellPrice: Number(document.querySelector("#sell-price").value),
+        stock: quantity,
+        photo: await readPhoto(photoFile),
+        purchases: [{
+          quantity,
+          buyPrice,
+          date: document.querySelector("#purchase-date").value
+        }]
+      };
+
+      await saveProduct(product);
+      productForm.reset();
+      document.querySelector("#purchase-date").value = today;
+      document.querySelector("#quantity").value = "1";
+      await renderProducts();
+    });
+
+    productList.addEventListener("click", async event => {
+      const button = event.target.closest(".restock-button");
+      if (!button) return;
+
+      const products = await getAllProducts();
+      const product = products.find(item => item.id === button.dataset.id);
+      if (!product) return;
+
+      document.querySelector("#restock-product-id").value = product.id;
+      document.querySelector("#restock-product-name").textContent = product.name;
+      document.querySelector("#restock-quantity").value = "1";
+      document.querySelector("#restock-price").value = product.buyPrice;
+      document.querySelector("#restock-date").value = today;
+      restockDialog.showModal();
+    });
+
+    document.querySelector("#cancel-restock").addEventListener("click", () => {
+      restockDialog.close();
+    });
+
+    document.querySelector("#restock-form").addEventListener("submit", async event => {
+      event.preventDefault();
+
+      const id = document.querySelector("#restock-product-id").value;
+      const products = await getAllProducts();
+      const product = products.find(item => item.id === id);
+      if (!product) return;
+
+      const quantity = Number(document.querySelector("#restock-quantity").value);
+      const buyPrice = Number(document.querySelector("#restock-price").value);
+      const date = document.querySelector("#restock-date").value;
+
+      product.stock += quantity;
+      product.buyPrice = buyPrice;
+      product.purchases = product.purchases || [];
+      product.purchases.push({ quantity, buyPrice, date });
+
+      await saveProduct(product);
+      restockDialog.close();
+      await renderProducts();
+    });
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(error => {
+          console.error("Service worker registration failed:", error);
+        });
+      });
+    }
+
+    renderProducts().catch(error => {
+      console.error(error);
+      productList.innerHTML = '<p class="muted">Could not load products. Please reload the app.</p>';
+    });
+  </script>
+</body>
+</html>
