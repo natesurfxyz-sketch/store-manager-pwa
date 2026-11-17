@@ -1,5 +1,5 @@
-const CACHE_NAME = "store-manager-v7";
-const APP_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./app.css", "./onboarding.js"];
+const CACHE_NAME = "store-manager-v8";
+const APP_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./app.css", "./onboarding.js", "./scanner.js"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_FILES)));
@@ -25,7 +25,7 @@ self.addEventListener("fetch", event => {
         let html = await response.text();
         if (!html.includes('id="onboarding-assets"')) {
           html = html.replace("</head>", '<link id="onboarding-assets" rel="stylesheet" href="./app.css"></head>')
-            .replace("</body>", '<script src="./onboarding.js"></script></body>');
+            .replace("</body>", '<script src="./onboarding.js"></script><script src="./scanner.js"></script></body>');
         }
         return new Response(html, { status: response.status, statusText: response.statusText, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
       }
@@ -36,7 +36,7 @@ self.addEventListener("fetch", event => {
         let html = await cached.text();
         if (!html.includes('id="onboarding-assets"')) {
           html = html.replace("</head>", '<link id="onboarding-assets" rel="stylesheet" href="./app.css"></head>')
-            .replace("</body>", '<script src="./onboarding.js"></script></body>');
+            .replace("</body>", '<script src="./onboarding.js"></script><script src="./scanner.js"></script></body>');
         }
         return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
@@ -45,7 +45,7 @@ self.addEventListener("fetch", event => {
         if (fallback) {
           let html = await fallback.text();
           html = html.replace("</head>", '<link id="onboarding-assets" rel="stylesheet" href="./app.css"></head>')
-            .replace("</body>", '<script src="./onboarding.js"></script></body>');
+            .replace("</body>", '<script src="./onboarding.js"></script><script src="./scanner.js"></script></body>');
           return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
         }
       }
