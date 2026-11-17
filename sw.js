@@ -1,4 +1,4 @@
-const CACHE_NAME = "store-manager-v5";
+const CACHE_NAME = "store-manager-v6";
 const APP_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./app.css", "./onboarding.js"];
 
 self.addEventListener("install", event => {
