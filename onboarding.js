@@ -5,6 +5,10 @@
     ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } })
     : null;
   const $ = (selector, root = document) => root.querySelector(selector);
+  // Layout fixes: bottom menu fits 6 buttons, order status buttons wrap, no sideways scrolling.
+  const layoutFix = document.createElement('style');
+  layoutFix.textContent = 'html,body{overflow-x:hidden}#navigation{display:flex!important;justify-content:space-between!important;gap:0!important;padding-left:2px!important;padding-right:2px!important}#navigation button{flex:1 1 0!important;min-width:0!important;max-width:none!important;padding:8px 1px!important;font-size:11.5px!important;line-height:1.15;text-align:center;white-space:nowrap;overflow:hidden}#navigation .onboarding-nav-button{display:flex;flex-direction:column;align-items:center;justify-content:center}#orders-list .row{flex-wrap:wrap}#orders-list .row button{flex:1 1 40%}';
+  document.head.append(layoutFix);
   let toastRegion;
   function toast(message, error = false) {
     if (!toastRegion) {
@@ -20,7 +24,11 @@
   }
   // Retain the app's existing validation and error messages but display them as toasts.
   window.alert = message => toast(String(message));
-  const friendly = error => error?.message || 'Something went wrong. Please try again.';
+  const friendly = error => {
+    const text = error?.message || '';
+    if (/could not find the function/i.test(text)) return 'Database setup is incomplete (a function is missing). Run the setup SQL in Supabase, then try again.';
+    return text || 'Something went wrong. Please try again.';
+  };
   const root = document.createElement('div');
   root.id = 'onboarding-root';
   document.body.append(root);
@@ -91,14 +99,23 @@
   function setupForm(kind) {
     const owner = kind === 'owner';
     showAuth(`<button class="onboarding-back" id="setup-back">← Back</button><h2>${owner ? 'Create your store' : 'Join a store'}</h2><p>${owner ? 'Choose a name your team will recognize.' : 'Enter the invite code shared by the store owner.'}</p>
-      <form id="setup-form">${owner ? '<label for="store-name">Store name</label><input id="store-name" maxlength="120" required>' : '<label for="invite-code">Invite code</label><input id="invite-code" autocomplete="off" required>'}<button>${owner ? 'Create store' : 'Join store'}</button><p class="onboarding-error" id="onboarding-error"></p></form>`);
+      <form id="setup-form">${owner ? '<label for="store-name">Store name</label><input id="store-name" maxlength="120" required>' : '<label for="invite-code">Invite code</label><input id="invite-code" autocomplete="off" required>'}<button type="submit">${owner ? 'Create store' : 'Join store'}</button><p class="onboarding-error" id="onboarding-error"></p></form>`);
     $('#setup-back').onclick = () => choiceScreen();
     $('#setup-form').onsubmit = async e => {
-      e.preventDefault(); const button = $('button[type=submit]', e.currentTarget); button.disabled = true; button.textContent = 'Working…';
-      const result = owner ? await client.rpc('create_store', { p_name: $('#store-name').value.trim() }) : await client.rpc('join_store', { p_code: $('#invite-code').value.trim() });
-      if (result.error) { button.disabled = false; button.textContent = owner ? 'Create store' : 'Join store'; return authError(friendly(result.error)); }
-      toast(owner ? 'Store created.' : 'You joined the store.');
-      await routeSignedIn(true);
+      e.preventDefault();
+      const button = $('button[type=submit]', e.currentTarget) || $('button', e.currentTarget);
+      const label = owner ? 'Create store' : 'Join store';
+      const reset = () => { button.disabled = false; button.textContent = label; };
+      if (!client) return authError('Supabase is not configured.');
+      button.disabled = true; button.textContent = 'Working…';
+      try {
+        const result = owner
+          ? await client.rpc('create_store', { p_name: $('#store-name').value.trim() })
+          : await client.rpc('join_store', { p_code: $('#invite-code').value.trim() });
+        if (result.error) { reset(); return authError(friendly(result.error)); }
+        toast(owner ? 'Store created.' : 'You joined the store.');
+        await routeSignedIn(true);
+      } catch (err) { reset(); authError(friendly(err)); }
     };
   }
   function legalPage(title) {

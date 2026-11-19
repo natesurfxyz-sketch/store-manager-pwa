@@ -1,4 +1,4 @@
-const CACHE_NAME = "store-manager-v9";
+const CACHE_NAME = "store-manager-v10";
 const APP_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./app.css", "./onboarding.js", "./scanner.js"];
 const ASSET_LINK = '<link id="onboarding-assets" rel="stylesheet" href="./app.css">';
 const ASSET_JS = '<script src="./onboarding.js"></script><script src="./scanner.js"></script>';
