@@ -1,7 +1,7 @@
-const CACHE_NAME = "store-manager-v10";
-const APP_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./app.css", "./onboarding.js", "./scanner.js"];
+const CACHE_NAME = "store-manager-v11";
+const APP_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./app.css", "./onboarding.js", "./branding.js", "./scanner.js"];
 const ASSET_LINK = '<link id="onboarding-assets" rel="stylesheet" href="./app.css">';
-const ASSET_JS = '<script src="./onboarding.js"></script><script src="./scanner.js"></script>';
+const ASSET_JS = '<script src="./onboarding.js"></script><script src="./branding.js"></script><script src="./scanner.js"></script>';
 
 function inject(html) {
   if (html.includes('id="onboarding-assets"')) return html;
