@@ -66,8 +66,8 @@
   // ---- Look and feel ------------------------------------------------------
   const style = document.createElement('style');
   style.textContent = `
-:root{color-scheme:light dark;--bg:#f4f6fa;--bg2:#eef1f6;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--brand:#183153;--brand-ink:#fff;--brand-soft:rgba(24,49,83,.12);--bt-l:#183153;--bt-d:#9db8e0;--brand-text:var(--bt-l);--shadow:0 1px 2px rgba(15,23,42,.05),0 8px 24px rgba(15,23,42,.06)}
-@media(prefers-color-scheme:dark){:root{--bg:#0b1020;--bg2:#101828;--card:#151c2b;--ink:#f1f5f9;--mut:#94a3b8;--line:#25304a;--brand-text:var(--bt-d);--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35)}}
+:root{color-scheme:light dark;--bg:#f4f6fa;--bg2:#eef1f6;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--brand-l:#183153;--ink-l:#fff;--soft-l:rgba(24,49,83,.12);--bt-l:#183153;--brand-d:#6d9be0;--ink-d:#0b1020;--soft-d:rgba(109,155,224,.2);--bt-d:#9db8e0;--brand:var(--brand-l);--brand-ink:var(--ink-l);--brand-soft:var(--soft-l);--brand-text:var(--bt-l);--shadow:0 1px 2px rgba(15,23,42,.05),0 8px 24px rgba(15,23,42,.06)}
+@media(prefers-color-scheme:dark){:root{--bg:#0b1020;--bg2:#101828;--card:#151c2b;--ink:#f1f5f9;--mut:#94a3b8;--line:#25304a;--brand:var(--brand-d);--brand-ink:var(--ink-d);--brand-soft:var(--soft-d);--brand-text:var(--bt-d);--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35)}}
 html,body{background:var(--bg)!important;color:var(--ink)!important}
 body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif!important;font-size:16px;line-height:1.45;padding-bottom:110px!important}
 .muted{color:var(--mut)!important}
@@ -106,18 +106,35 @@ header .muted{font-size:.8rem}
 main .sellbar{background:var(--brand)!important;color:var(--brand-ink)!important;border:0!important}
 main .sellbar button:not(.secondary):not(.danger){background:var(--brand-ink)!important;color:var(--brand)!important}
 .bar i{background:var(--brand)!important}
+#navigation button{display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 1px!important}
+#navigation button span{font-size:11px;font-weight:600}
+#navigation .nv{display:block;width:22px;height:22px}
+#connection{background:var(--brand-soft)!important;color:var(--brand-text)!important;font-size:.78rem;font-weight:600;padding:5px 11px 5px 9px!important;border-radius:99px;display:inline-flex;align-items:center;gap:6px;flex:none}
+#connection::before{content:"";width:8px;height:8px;border-radius:50%;background:#22c55e}
+#connection.low::before{background:#f59e0b}
+main #signout{background:transparent!important;color:var(--mut)!important;min-height:36px!important;padding:6px 12px!important}
+#add-product-toggle{margin:4px 0 12px}
 `;
   document.head.append(style);
 
+  const isMono = rgb => rgb2hsl(...rgb)[1] < 0.18;
+  const iconBg = () => isMono(parseHex(brand.color)) ? '#111827' : brand.color;
+  function schemeColors(rgb, card) {
+    const dark = lum(card) < 0.3; let bg, soft, text;
+    if (isMono(rgb)) { bg = dark ? [241, 245, 249] : [17, 24, 39]; soft = dark ? 'rgba(241,245,249,.14)' : 'rgba(17,24,39,.08)'; text = toHex(bg); }
+    else {
+      bg = rgb.slice(); const [bh, bs] = rgb2hsl(...bg); let bl = rgb2hsl(...bg)[2];
+      for (let i = 0; i < 30 && contrast(bg, card) < 3; i++) { bl += dark ? 0.03 : -0.03; if (bl > 0.9 || bl < 0.1) break; bg = hsl2rgb(bh, bs, bl); }
+      soft = `rgba(${bg.map(Math.round).join(',')},${dark ? 0.2 : 0.14})`; text = textOn(bg, card);
+    }
+    return { bg: toHex(bg), ink: contrast(bg, [255, 255, 255]) >= 3 ? '#ffffff' : '#111111', soft, text };
+  }
   function applyTheme() {
-    const rgb = parseHex(brand.color), st = document.documentElement.style;
-    st.setProperty('--brand', toHex(rgb));
-    st.setProperty('--brand-ink', lum(rgb) > 0.35 ? '#111111' : '#ffffff');
-    st.setProperty('--brand-soft', `rgba(${rgb.map(Math.round).join(',')},.15)`);
-    st.setProperty('--bt-l', textOn(rgb, [255, 255, 255]));
-    st.setProperty('--bt-d', textOn(rgb, [21, 28, 43]));
+    const rgb = parseHex(brand.color), L = schemeColors(rgb, [255, 255, 255]), D = schemeColors(rgb, [21, 28, 43]), st = document.documentElement.style;
+    st.setProperty('--brand-l', L.bg); st.setProperty('--ink-l', L.ink); st.setProperty('--soft-l', L.soft); st.setProperty('--bt-l', L.text);
+    st.setProperty('--brand-d', D.bg); st.setProperty('--ink-d', D.ink); st.setProperty('--soft-d', D.soft); st.setProperty('--bt-d', D.text);
     let meta = $('meta[name=theme-color]'); if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.append(meta); }
-    meta.content = toHex(rgb);
+    meta.content = L.bg;
   }
 
   const initial = () => (brand.name || 'S').trim().slice(0, 1).toUpperCase() || 'S';
@@ -150,10 +167,10 @@ main .sellbar button:not(.secondary):not(.danger){background:var(--brand-ink)!im
   function roundRect(x, px, py, w, h, r) { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r); x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); }
   function drawIcon(size, img) {
     const c = document.createElement('canvas'); c.width = c.height = size; const x = c.getContext('2d');
-    x.fillStyle = brand.color; x.fillRect(0, 0, size, size);
+    x.fillStyle = iconBg(); x.fillRect(0, 0, size, size);
     const pad = size * 0.16;
     if (img) { x.fillStyle = '#ffffff'; roundRect(x, pad * 0.75, pad * 0.75, size - pad * 1.5, size - pad * 1.5, size * 0.18); x.fill(); x.drawImage(img, pad, pad, size - pad * 2, size - pad * 2); }
-    else { x.fillStyle = lum(parseHex(brand.color)) > 0.35 ? '#111' : '#fff'; x.font = `800 ${size * 0.55}px system-ui,sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(initial(), size / 2, size / 2 + size * 0.03); }
+    else { x.fillStyle = lum(parseHex(iconBg())) > 0.35 ? '#111' : '#fff'; x.font = `800 ${size * 0.55}px system-ui,sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(initial(), size / 2, size / 2 + size * 0.03); }
     return c.toDataURL('image/png');
   }
   function setLink(rel, href, type) {
@@ -166,7 +183,7 @@ main .sellbar button:not(.secondary):not(.danger){background:var(--brand-ink)!im
     try {
       const img = brand.logo ? await loadImg(brand.logo).catch(() => null) : null;
       const i192 = drawIcon(192, img), i512 = drawIcon(512, img), base = new URL('./', location.href).href;
-      const m = { name: brand.name, short_name: (brand.name || 'Store').slice(0, 12), start_url: base, scope: base, display: 'standalone', background_color: '#ffffff', theme_color: brand.color,
+      const m = { name: brand.name, short_name: (brand.name || 'Store').slice(0, 12), start_url: base, scope: base, display: 'standalone', background_color: '#ffffff', theme_color: iconBg(),
         icons: [{ src: i192, sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: i512, sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: i512, sizes: '512x512', type: 'image/png', purpose: 'maskable' }] };
       const url = URL.createObjectURL(new Blob([JSON.stringify(m)], { type: 'application/manifest+json' }));
       let link = $('link[rel=manifest]'); if (!link) { link = document.createElement('link'); link.rel = 'manifest'; document.head.append(link); }
@@ -257,9 +274,40 @@ main .sellbar button:not(.secondary):not(.danger){background:var(--brand-ink)!im
     if (window.matchMedia('(display-mode: standalone)').matches) $('#be-install-box')?.classList.add('hidden');
   }
 
+  // ---- Bottom menu icons --------------------------------------------------
+  const ICONS = {
+    home: '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    products: '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+    orders: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 11.5a1 1 0 0 0 1 .8h8.8a1 1 0 0 0 1-.8L20 7H6"/>',
+    customers: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c2 .6 3.3 2.3 3.7 5.2"/>',
+    reports: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    more: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'
+  };
+  function decorateNav() {
+    document.querySelectorAll('#navigation button').forEach(b => {
+      if (b.dataset.deco) return;
+      const key = b.dataset.view || (b.classList.contains('onboarding-nav-button') ? 'more' : ''); if (!ICONS[key]) return;
+      const label = ((b.querySelector('span:last-child') || b).textContent || '').trim();
+      b.innerHTML = `<svg class="nv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[key]}</svg><span>${label}</span>`;
+      b.dataset.deco = '1';
+    });
+  }
+
+  // ---- Products: keep the add form tucked away until needed ---------------
+  function mountProductToggle() {
+    const form = $('#product-form'), title = $('#product-form-title'); if (!form || !title || $('#add-product-toggle')) return;
+    const btn = document.createElement('button'); btn.type = 'button'; btn.id = 'add-product-toggle'; btn.style.width = '100%'; form.before(btn);
+    let open = false;
+    const sync = () => { const editing = title.textContent === 'Edit product'; form.classList.toggle('hidden', !(open || editing)); btn.classList.toggle('hidden', editing); btn.textContent = open ? '✕ Close form' : '＋ Add product'; };
+    btn.onclick = () => { open = !open; sync(); if (open) form.scrollIntoView({ behavior: 'smooth' }); };
+    form.addEventListener('reset', () => { open = false; setTimeout(sync, 0); });
+    new MutationObserver(sync).observe(title, { childList: true, characterData: true, subtree: true });
+    sync();
+  }
+
   // ---- Keep everything in sync as the app re-renders ----------------------
   let queued = false;
-  const tick = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; applyDom(); const app = $('#app'); if (app && !app.classList.contains('hidden')) { if (!loaded) loadBrand(); mountEditor(); } }); };
+  const tick = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; applyDom(); decorateNav(); mountProductToggle(); const app = $('#app'); if (app && !app.classList.contains('hidden')) { if (!loaded) loadBrand(); mountEditor(); } }); };
   new MutationObserver(tick).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   applyAll(); tick();
 })();
