@@ -118,11 +118,7 @@
       } catch (err) { reset(); authError(friendly(err)); }
     };
   }
-  function legalPage(title) {
-    const page = document.createElement('div'); page.className = 'onboarding-legal';
-    page.innerHTML = `<article><button class="onboarding-back legal-back">← Back</button><h1>${title}</h1><p class="muted">Placeholder information</p><p>This ${title.toLowerCase()} page is a placeholder for Store Manager. Before inviting real customers or staff, replace this text with your final terms and privacy details, including what information is collected, how it is used, how long it is retained, and how users can contact you.</p><button class="legal-back">Close</button></article>`;
-    document.body.append(page); page.querySelectorAll('.legal-back').forEach(b => b.onclick = () => page.remove());
-  }
+  function legalPage(title) { window.open(title === 'Terms' ? './terms.html' : './privacy.html', '_blank'); }
   async function getProfile() {
     if (!currentUser) return null;
     const { data, error } = await client.from('profiles').select('id,store_id,role').eq('id', currentUser.id).maybeSingle();
